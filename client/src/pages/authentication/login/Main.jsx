@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { FcGoogle } from "react-icons/fc";
 import { Eye, EyeOff, Mail, Lock, Bed } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -18,6 +18,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
+import authService from "@/services/authService";
+import { toast } from "sonner";
 
 const loginSchema = z.object({
   email: z.string().min(1, "Email is required").email("Invalid email address"),
@@ -27,6 +29,9 @@ const loginSchema = z.object({
 
 function Login() {
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   const form = useForm({
     resolver: zodResolver(loginSchema),
@@ -37,8 +42,46 @@ function Login() {
     },
   });
 
-  const onSubmit = (data) => {
-    console.log("Form Data:", data);
+  const onSubmit = async (data) => {
+    try {
+      setLoading(true);
+      setError("");
+      
+      console.log("Attempting login with:", { email: data.email });
+      
+      const response = await authService.login({
+        email: data.email,
+        password: data.password,
+      });
+
+      console.log("Login successful:", response);
+      
+      toast.success("Login successful!", {
+        description: `Welcome back, ${response.data.name}!`
+      });
+      
+      // Small delay for toast to show
+      setTimeout(() => {
+        // Redirect based on user role
+        if (response.data.role === "partner") {
+          navigate("/for-partners");
+        } else {
+          navigate("/");
+        }
+      }, 500);
+    } catch (err) {
+      console.error("Login error:", err);
+      console.error("Error response:", err.response);
+      
+      const errorMessage = err.response?.data?.message || "Invalid email or password";
+      setError(errorMessage);
+      
+      toast.error("Login failed", {
+        description: errorMessage
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -55,6 +98,11 @@ function Login() {
           <CardTitle className="text-2xl text-center">Log In</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -139,9 +187,10 @@ function Login() {
 
               <Button
                 type="submit"
-                className="w-full h-12 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white"
+                disabled={loading}
+                className="w-full h-12 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white disabled:opacity-50"
               >
-                Log In
+                {loading ? "Logging in..." : "Log In"}
               </Button>
             </form>
           </Form>

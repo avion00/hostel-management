@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Eye, EyeOff, Mail, Lock, User, Phone, Bed } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 
 import {
   Select,
@@ -12,11 +13,15 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Link } from "react-router-dom";
+import authService from "@/services/authService";
+import { toast } from "sonner";
 
 function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -29,6 +34,81 @@ function Signup() {
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    // Validation
+    if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
+      setError("Please fill in all required fields");
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
+    if (!formData.userType) {
+      setError("Please select user type (Student or Hostel Partner)");
+      toast.error("Missing information", {
+        description: "Please select whether you are a Student or Hostel Partner"
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      console.log("Attempting signup with:", {
+        name: `${formData.firstName} ${formData.lastName}`,
+        email: formData.email,
+        role: formData.userType
+      });
+      
+      const response = await authService.signup({
+        name: `${formData.firstName} ${formData.lastName}`,
+        email: formData.email,
+        password: formData.password,
+        phone: formData.phone,
+        role: formData.userType,
+      });
+
+      console.log("Signup successful:", response);
+      
+      toast.success("Account created successfully!", {
+        description: "Redirecting to home page..."
+      });
+      
+      // Small delay for toast to show
+      setTimeout(() => {
+        // Redirect based on user role
+        if (response.data.role === "partner") {
+          navigate("/for-partners");
+        } else {
+          navigate("/");
+        }
+      }, 500);
+    } catch (err) {
+      console.error("Signup error:", err);
+      console.error("Error response:", err.response);
+      
+      const errorMessage = err.response?.data?.message || "Failed to create account";
+      setError(errorMessage);
+      
+      toast.error("Signup failed", {
+        description: errorMessage
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -44,7 +124,12 @@ function Signup() {
           <CardTitle className="text-2xl text-center">Sign Up</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <form className="space-y-4">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label
@@ -126,6 +211,27 @@ function Signup() {
                   onChange={(e) => handleInputChange("phone", e.target.value)}
                 />
               </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="userType"
+                className="text-sm font-medium text-slate-700 mb-2 block"
+              >
+                User Type
+              </label>
+              <Select
+                value={formData.userType}
+                onValueChange={(value) => handleInputChange("userType", value)}
+              >
+                <SelectTrigger className="h-12 bg-slate-50 border-slate-200">
+                  <SelectValue placeholder="Select user type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="student">Student</SelectItem>
+                  <SelectItem value="partner">Hostel Partner</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="flex gap-3">
@@ -214,9 +320,10 @@ function Signup() {
             </div>
             <Button
               type="submit"
-              className="w-full h-12 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white"
+              disabled={loading}
+              className="w-full h-12 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white disabled:opacity-50"
             >
-              Create Account
+              {loading ? "Creating Account..." : "Create Account"}
             </Button>
           </form>
 
