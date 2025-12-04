@@ -1,5 +1,4 @@
-import { useState } from "react";
-
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,74 +25,15 @@ import {
   CheckCircle,
   Users,
 } from "lucide-react";
+import axios from "axios";
+import { toast } from "sonner";
+import apis from "@/lib/api/api";
 
 function FindHostelsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [priceRange, setPriceRange] = useState([2000, 15000]);
   const [showFilters, setShowFilters] = useState(false);
-
-  const hostels = [
-    {
-      id: 1,
-      name: "Green Valley Student Hostel",
-      location: "Dharan, Nepal",
-      distance: "0.5 km from chowk",
-      rating: 4.8,
-      reviews: 124,
-      price: 8500,
-      image:
-        "https://media.designcafe.com/wp-content/uploads/2023/07/05141750/aesthetic-room-decor.jpg",
-      amenities: ["WiFi", "AC", "Parking", "Kitchen"],
-      roomType: "Single Room",
-      verified: true,
-      liked: false,
-    },
-    {
-      id: 2,
-      name: "Urban Living Hostel",
-      location: "Biratnagar, Nepal",
-      distance: "1.2 km from Chowk",
-      rating: 4.6,
-      reviews: 89,
-      price: 6500,
-      image:
-        "https://i.pinimg.com/736x/2e/92/57/2e9257f6c7d679ee0d0dfdd5636bd327.jpg",
-      amenities: ["WiFi", "Kitchen", "Security"],
-      roomType: "Shared Room",
-      verified: true,
-      liked: true,
-    },
-    {
-      id: 3,
-      name: "Student Paradise",
-      location: "Pokhara, Nepal",
-      distance: "2.1 km from chowk",
-      rating: 4.4,
-      reviews: 67,
-      price: 4200,
-      image:
-        "https://i.pinimg.com/564x/fe/ce/52/fece5293cef4572b965d41eda2de8a32.jpg",
-      amenities: ["WiFi", "Common Area"],
-      roomType: "Dormitory",
-      verified: true,
-      liked: false,
-    },
-    {
-      id: 4,
-      name: "Elite Student Residence",
-      location: "Kathmandu, Nepal",
-      distance: "1.8 km from chowk",
-      rating: 4.9,
-      reviews: 156,
-      price: 12000,
-      image:
-        "https://media.istockphoto.com/id/484706362/photo/luxurious-living-room-in-new-home.jpg?s=612x612&w=0&k=20&c=4puAmBhX-a303hlxZzTy2ZXmN70FE0GOmDILDGZxq5Y=",
-      amenities: ["WiFi", "AC", "Parking", "Kitchen", "Gym"],
-      roomType: "Single Room",
-      verified: true,
-      liked: false,
-    },
-  ];
+  const [hostels, setHostels] = useState([]);
 
   const amenityIcons = {
     WiFi: Wifi,
@@ -104,6 +44,21 @@ function FindHostelsPage() {
     Gym: Users,
     "Common Area": Users,
   };
+
+  const fetchHostels = async () => {
+    try {
+      const res = await axios.get(apis.listProperty);
+
+      setHostels(res.data.data || []);
+    } catch (err) {
+      console.error(err);
+      toast.error("Error fetching hostels");
+    }
+  };
+
+  useEffect(() => {
+    fetchHostels();
+  }, []);
 
   return (
     <>
@@ -141,31 +96,12 @@ function FindHostelsPage() {
                 </Button>
               </div>
             </div>
-
-            <div className="flex flex-wrap gap-2 mt-4">
-              {[
-                "Near DU",
-                "Under Rs.5000",
-                "Single Room",
-                "AC Available",
-                "Parking",
-              ].map((filter) => (
-                <Badge
-                  key={filter}
-                  variant="secondary"
-                  className="cursor-pointer hover:bg-indigo-100 hover:text-indigo-700 transition-colors"
-                >
-                  {filter}
-                </Badge>
-              ))}
-            </div>
           </div>
         </div>
       </section>
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Filters Sidebar */}
           <div
             className={`lg:w-80 ${showFilters ? "block" : "hidden lg:block"}`}
           >
@@ -174,7 +110,6 @@ function FindHostelsPage() {
                 <CardTitle className="text-lg">Filters</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Price Range */}
                 <div>
                   <label className="text-sm font-medium text-slate-700 mb-3 block">
                     Price Range: Rs.{priceRange[0]} - Rs.{priceRange[1]}
@@ -188,8 +123,6 @@ function FindHostelsPage() {
                     className="w-full"
                   />
                 </div>
-
-                {/* Room Type */}
                 <div>
                   <label className="text-sm font-medium text-slate-700 mb-3 block">
                     Room Type
@@ -206,7 +139,6 @@ function FindHostelsPage() {
                   </Select>
                 </div>
 
-                {/* Amenities */}
                 <div>
                   <label className="text-sm font-medium text-slate-700 mb-3 block">
                     Amenities
@@ -236,24 +168,6 @@ function FindHostelsPage() {
                   </div>
                 </div>
 
-                {/* Distance */}
-                <div>
-                  <label className="text-sm font-medium text-slate-700 mb-3 block">
-                    Distance from College
-                  </label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select distance" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1km">Within 1 km</SelectItem>
-                      <SelectItem value="2km">Within 2 km</SelectItem>
-                      <SelectItem value="5km">Within 5 km</SelectItem>
-                      <SelectItem value="any">Any distance</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 <Button className="w-full bg-gradient-to-r from-indigo-500 to-purple-500">
                   Apply Filters
                 </Button>
@@ -261,39 +175,19 @@ function FindHostelsPage() {
             </Card>
           </div>
 
-          {/* Results */}
           <div className="flex-1">
-            <div className="flex justify-between items-center mb-6">
-              <p className="text-slate-600">
-                Showing <span className="font-semibold">{hostels.length}</span>{" "}
-                hostels in Delhi
-              </p>
-              <Select defaultValue="rating">
-                <SelectTrigger className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="rating">Highest Rated</SelectItem>
-                  <SelectItem value="price-low">Price: Low to High</SelectItem>
-                  <SelectItem value="price-high">Price: High to Low</SelectItem>
-                  <SelectItem value="distance">Nearest First</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-6">
               {hostels.map((hostel) => (
                 <Card
-                  key={hostel.id}
+                  key={hostel._id}
                   className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden"
                 >
                   <div className="flex flex-col md:flex-row">
                     <div className="relative md:w-80 h-48 md:h-auto">
                       <img
-                        src={hostel.image}
+                        src={hostel.image || "/placeholder.svg"}
                         alt={hostel.name}
-                        fill
-                        className="object-cover"
+                        className="object-cover w-full h-full"
                       />
                       <div className="absolute top-3 left-3">
                         {hostel.verified && (
@@ -302,26 +196,6 @@ function FindHostelsPage() {
                             Verified
                           </Badge>
                         )}
-                      </div>
-                      <div className="absolute top-3 right-3 flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="w-8 h-8 p-0 bg-white/90 hover:bg-white"
-                        >
-                          <Heart
-                            className={`w-4 h-4 ${
-                              hostel.liked ? "fill-red-500 text-red-500" : ""
-                            }`}
-                          />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="w-8 h-8 p-0 bg-white/90 hover:bg-white"
-                        >
-                          <Share2 className="w-4 h-4" />
-                        </Button>
                       </div>
                     </div>
 
@@ -333,7 +207,7 @@ function FindHostelsPage() {
                           </h3>
                           <div className="flex items-center text-slate-600 text-sm mb-2">
                             <MapPin className="w-4 h-4 mr-1" />
-                            {hostel.location} • {hostel.distance}
+                            {hostel.location} • {hostel.distance || "N/A"}
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="flex items-center">
@@ -343,23 +217,23 @@ function FindHostelsPage() {
                               </span>
                             </div>
                             <span className="text-sm text-slate-500">
-                              ({hostel.reviews} reviews)
+                              ({hostel.reviews || 0} reviews)
                             </span>
                             <Badge variant="secondary" className="text-xs">
-                              {hostel.roomType}
+                              {hostel.roomType || "Single Room"}
                             </Badge>
                           </div>
                         </div>
                         <div className="text-right">
                           <div className="text-2xl font-bold text-indigo-600">
-                            Rs.{hostel.price.toLocaleString()}
+                            Rs.{hostel.price?.toLocaleString()}
                           </div>
                           <div className="text-sm text-slate-500">/month</div>
                         </div>
                       </div>
 
                       <div className="flex flex-wrap gap-2 mb-4">
-                        {hostel.amenities.map((amenity) => {
+                        {hostel.amenities?.map((amenity) => {
                           const IconComponent =
                             amenityIcons[amenity] || CheckCircle;
                           return (
@@ -389,16 +263,6 @@ function FindHostelsPage() {
                   </div>
                 </Card>
               ))}
-            </div>
-
-            <div className="text-center mt-8">
-              <Button
-                variant="outline"
-                size="lg"
-                className="px-8 bg-transparent"
-              >
-                Load More Hostels
-              </Button>
             </div>
           </div>
         </div>

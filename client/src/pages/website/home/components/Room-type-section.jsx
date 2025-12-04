@@ -1,38 +1,149 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowRight, CheckCircle } from "lucide-react";
-
-const roomTypes = [
-  {
-    title: "Single Room",
-    price: "Rs. 8,000",
-    period: "/month",
-    features: ["Private bathroom", "Study desk", "Wi-Fi", "AC"],
-    image: "https://m.media-amazon.com/images/I/91eeEacVzLL.jpg",
-    popular: true,
-  },
-  {
-    title: "Shared Room",
-    price: "Rs. 4,500",
-    period: "/month",
-    features: ["2-3 sharing", "Common bathroom", "Wi-Fi", "Study area"],
-    image:
-      "https://i.pinimg.com/736x/42/21/7b/42217bcdfe74e4ca028385cd89a91f6c.jpg",
-    popular: false,
-  },
-  {
-    title: "Dormitory",
-    price: "Rs. 2,800",
-    period: "/month",
-    features: ["6-8 sharing", "Common facilities", "Wi-Fi", "Locker"],
-    image:
-      "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRJ2ls0Bmmos4ecrsu40Zi9K3Cf2_8YgXsBQ&s",
-    popular: false,
-  },
-];
+import { ArrowRight, CheckCircle, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import apis from "@/lib/api/api";
 
 const RoomTypeSection = () => {
+  const [roomTypes, setRoomTypes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchProperties();
+  }, []);
+
+  const fetchProperties = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(apis.getProperties);
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        // Group properties by room type and get the best examples
+        const roomTypeMap = {
+          single: { title: "Single Room", popular: true, features: ["Private bathroom", "Study desk", "Wi-Fi", "AC"] },
+          double: { title: "Shared Room", popular: false, features: ["2-3 sharing", "Common bathroom", "Wi-Fi", "Study area"] },
+          triple: { title: "Dormitory", popular: false, features: ["6-8 sharing", "Common facilities", "Wi-Fi", "Locker"] },
+        };
+
+        // Find best property for each room type
+        const roomTypesData = [];
+        const processedTypes = new Set();
+
+        data.data.forEach((property) => {
+          // Try to categorize by price
+          const price = property.price_per_month;
+          let type = 'triple'; // default to dormitory
+          
+          if (price >= 7000) {
+            type = 'single';
+          } else if (price >= 4000) {
+            type = 'double';
+          }
+
+          if (!processedTypes.has(type)) {
+            const images = property.images ? JSON.parse(property.images) : [];
+            const amenities = property.amenities ? JSON.parse(property.amenities) : [];
+            
+            roomTypesData.push({
+              id: property.id,
+              title: roomTypeMap[type].title,
+              price: `Rs. ${price.toLocaleString()}`,
+              period: "/month",
+              features: amenities.length > 0 ? amenities.slice(0, 4) : roomTypeMap[type].features,
+              image: images[0] || "https://m.media-amazon.com/images/I/91eeEacVzLL.jpg",
+              popular: roomTypeMap[type].popular,
+              propertyName: property.name,
+              city: property.city,
+            });
+            
+            processedTypes.add(type);
+          }
+        });
+
+        // If we don't have all 3 types, add fallback data
+        if (roomTypesData.length < 3) {
+          const fallbackRooms = [
+            {
+              title: "Single Room",
+              price: "Rs. 8,000",
+              period: "/month",
+              features: ["Private bathroom", "Study desk", "Wi-Fi", "AC"],
+              image: "https://m.media-amazon.com/images/I/91eeEacVzLL.jpg",
+              popular: true,
+            },
+            {
+              title: "Shared Room",
+              price: "Rs. 4,500",
+              period: "/month",
+              features: ["2-3 sharing", "Common bathroom", "Wi-Fi", "Study area"],
+              image: "https://i.pinimg.com/736x/42/21/7b/42217bcdfe74e4ca028385cd89a91f6c.jpg",
+              popular: false,
+            },
+            {
+              title: "Dormitory",
+              price: "Rs. 2,800",
+              period: "/month",
+              features: ["6-8 sharing", "Common facilities", "Wi-Fi", "Locker"],
+              image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRJ2ls0Bmmos4ecrsu40Zi9K3Cf2_8YgXsBQ&s",
+              popular: false,
+            },
+          ];
+          
+          setRoomTypes(fallbackRooms);
+        } else {
+          setRoomTypes(roomTypesData.slice(0, 3));
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching properties:", err);
+      setError(err.message);
+      // Set fallback data on error
+      setRoomTypes([
+        {
+          title: "Single Room",
+          price: "Rs. 8,000",
+          period: "/month",
+          features: ["Private bathroom", "Study desk", "Wi-Fi", "AC"],
+          image: "https://m.media-amazon.com/images/I/91eeEacVzLL.jpg",
+          popular: true,
+        },
+        {
+          title: "Shared Room",
+          price: "Rs. 4,500",
+          period: "/month",
+          features: ["2-3 sharing", "Common bathroom", "Wi-Fi", "Study area"],
+          image: "https://i.pinimg.com/736x/42/21/7b/42217bcdfe74e4ca028385cd89a91f6c.jpg",
+          popular: false,
+        },
+        {
+          title: "Dormitory",
+          price: "Rs. 2,800",
+          period: "/month",
+          features: ["6-8 sharing", "Common facilities", "Wi-Fi", "Locker"],
+          image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRJ2ls0Bmmos4ecrsu40Zi9K3Cf2_8YgXsBQ&s",
+          popular: false,
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <section className="py-20">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-center items-center min-h-[400px]">
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="py-20">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">

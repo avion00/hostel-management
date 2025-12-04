@@ -1,6 +1,14 @@
 import { useState } from "react";
-import { Eye, EyeOff, Mail, Lock, User, Phone, Bed } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import {
+  Eye,
+  EyeOff,
+  Mail,
+  Lock,
+  User,
+  Phone,
+  Bed,
+  Axis3DIcon,
+} from "lucide-react";
 
 import {
   Select,
@@ -13,24 +21,25 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import authService from "@/services/authService";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
+import apis from "@/lib/api/api";
 import { toast } from "sonner";
 
 function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     email: "",
-    phone: "",
+    phoneNumber: "",
+    role: "student",
     password: "",
     confirmPassword: "",
-    userType: "",
   });
+
+  const navigate = useNavigate();
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -38,76 +47,55 @@ function Signup() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-
-    // Validation
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
-      setError("Please fill in all required fields");
-      return;
-    }
-
+    
+    // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match");
+      toast.error("Passwords do not match");
       return;
     }
-
-    if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
-
-    if (!formData.userType) {
-      setError("Please select user type (Student or Hostel Partner)");
-      toast.error("Missing information", {
-        description: "Please select whether you are a Student or Hostel Partner"
-      });
-      return;
-    }
-
+    
     try {
-      setLoading(true);
-      
-      console.log("Attempting signup with:", {
-        name: `${formData.firstName} ${formData.lastName}`,
-        email: formData.email,
-        role: formData.userType
-      });
-      
-      const response = await authService.signup({
-        name: `${formData.firstName} ${formData.lastName}`,
+      // Format data for backend API
+      const signupData = {
+        name: `${formData.firstName} ${formData.lastName}`.trim(),
         email: formData.email,
         password: formData.password,
-        phone: formData.phone,
-        role: formData.userType,
+        phone: formData.phoneNumber,
+        role: formData.role
+      };
+      
+      const response = await axios.post(apis.signup, signupData, {
+        withCredentials: true,
       });
 
-      console.log("Signup successful:", response);
-      
-      toast.success("Account created successfully!", {
-        description: "Redirecting to home page..."
-      });
-      
-      // Small delay for toast to show
-      setTimeout(() => {
-        // Redirect based on user role
-        if (response.data.role === "partner") {
-          navigate("/for-partners");
-        } else {
-          navigate("/");
-        }
-      }, 500);
+      if (response.status === 201) {
+        toast.success(response?.data?.message || "Account created successfully!");
+        navigate("/login");
+      }
     } catch (err) {
       console.error("Signup error:", err);
-      console.error("Error response:", err.response);
       
-      const errorMessage = err.response?.data?.message || "Failed to create account";
-      setError(errorMessage);
-      
-      toast.error("Signup failed", {
-        description: errorMessage
-      });
-    } finally {
-      setLoading(false);
+      // Handle different error scenarios
+      if (err.response) {
+        const status = err.response.status;
+        const message = err.response.data?.message;
+        const errors = err.response.data?.errors;
+        
+        if (status === 400) {
+          if (errors && errors.length > 0) {
+            // Show password validation errors
+            errors.forEach(error => toast.error(error));
+          } else {
+            toast.error(message || "Please check your input and try again.");
+          }
+        } else {
+          toast.error(message || "Error creating account. Please try again.");
+        }
+      } else if (err.request) {
+        toast.error("Cannot connect to server. Please check your internet connection.");
+      } else {
+        toast.error("An unexpected error occurred. Please try again.");
+      }
     }
   };
 
@@ -124,12 +112,7 @@ function Signup() {
           <CardTitle className="text-2xl text-center">Sign Up</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label
@@ -195,7 +178,7 @@ function Signup() {
             </div>
             <div>
               <label
-                htmlFor="phone"
+                htmlFor="phoneNumber"
                 className="text-sm font-medium text-slate-700 mb-2 block"
               >
                 Phone Number
@@ -203,35 +186,40 @@ function Signup() {
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
                 <Input
-                  id="phone"
+                  id="phoneNumber"
                   type="tel"
                   placeholder="Enter your phone number"
                   className="pl-10 h-12 bg-slate-50 border-slate-200 focus:bg-white"
-                  value={formData.phone}
-                  onChange={(e) => handleInputChange("phone", e.target.value)}
+                  value={formData.phoneNumber}
+                  onChange={(e) =>
+                    handleInputChange("phoneNumber", e.target.value)
+                  }
                 />
               </div>
             </div>
 
             <div>
               <label
-                htmlFor="userType"
+                htmlFor="role"
                 className="text-sm font-medium text-slate-700 mb-2 block"
               >
-                User Type
+                Account Type
               </label>
               <Select
-                value={formData.userType}
-                onValueChange={(value) => handleInputChange("userType", value)}
+                value={formData.role}
+                onValueChange={(value) => handleInputChange("role", value)}
               >
-                <SelectTrigger className="h-12 bg-slate-50 border-slate-200">
-                  <SelectValue placeholder="Select user type" />
+                <SelectTrigger className="h-12 bg-slate-50 border-slate-200 focus:bg-white">
+                  <SelectValue placeholder="Select account type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="student">Student</SelectItem>
-                  <SelectItem value="partner">Hostel Partner</SelectItem>
+                  <SelectItem value="manager">Property Manager</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-slate-500 mt-1">
+                Students can browse and book hostels. Managers can list and manage properties.
+              </p>
             </div>
 
             <div className="flex gap-3">
@@ -320,10 +308,9 @@ function Signup() {
             </div>
             <Button
               type="submit"
-              disabled={loading}
-              className="w-full h-12 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white disabled:opacity-50"
+              className="w-full h-12 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white"
             >
-              {loading ? "Creating Account..." : "Create Account"}
+              Create Account
             </Button>
           </form>
 

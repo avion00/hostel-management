@@ -18,8 +18,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
-import authService from "@/services/authService";
 import { toast } from "sonner";
+import axiosInstance from "@/lib/api/axiosInstance";
+import apis from "@/lib/api/api";
+import { useDispatch } from "react-redux";
+import { setIsLoggedIn, setAccessToken, setRefreshToken, setUser } from "@/redux/features/authSlice";
 
 const loginSchema = z.object({
   email: z.string().min(1, "Email is required").email("Invalid email address"),
@@ -29,9 +32,8 @@ const loginSchema = z.object({
 
 function Login() {
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   const form = useForm({
     resolver: zodResolver(loginSchema),
@@ -42,45 +44,68 @@ function Login() {
     },
   });
 
-  const onSubmit = async (data) => {
+  const onSubmit = async (e) => {
+    e.preventDefault();
     try {
-      setLoading(true);
-      setError("");
+      const response = await axiosInstance.post(apis.login, form.getValues());
       
-      console.log("Attempting login with:", { email: data.email });
-      
-      const response = await authService.login({
-        email: data.email,
-        password: data.password,
-      });
-
-      console.log("Login successful:", response);
-      
-      toast.success("Login successful!", {
-        description: `Welcome back, ${response.data.name}!`
-      });
-      
-      // Small delay for toast to show
-      setTimeout(() => {
-        // Redirect based on user role
-        if (response.data.role === "partner") {
-          navigate("/for-partners");
+      if (response?.status === 200 && response?.data?.success) {
+        const { accessToken, refreshToken, ...userData } = response.data.data;
+        
+        // Store tokens and user data
+        dispatch(setAccessToken(accessToken));
+        dispatch(setRefreshToken(refreshToken));
+        dispatch(setUser(userData));
+        dispatch(setIsLoggedIn(true));
+        
+        toast.success("Login successful!");
+        
+        // Navigate based on role
+        const role = userData.role.toLowerCase();
+        if (role === "student") {
+          navigate("/");
+        } else if (role === "manager") {
+          navigate("/dashboard/owner/overview");
+        } else if (role === "admin") {
+          navigate("/dashboard/admin/overview");
         } else {
           navigate("/");
         }
-      }, 500);
+      }
     } catch (err) {
       console.error("Login error:", err);
-      console.error("Error response:", err.response);
       
-      const errorMessage = err.response?.data?.message || "Invalid email or password";
-      setError(errorMessage);
-      
-      toast.error("Login failed", {
-        description: errorMessage
-      });
-    } finally {
-      setLoading(false);
+      // Handle different error scenarios
+      if (err.response) {
+        const status = err.response.status;
+        const message = err.response.data?.message;
+        
+        if (status === 401) {
+          // Invalid credentials
+          toast.error(message || "Invalid email or password. Please check your credentials.");
+        } else if (status === 423) {
+          // Account locked
+          toast.error(message || "Account is locked due to too many failed attempts. Please wait 15 minutes.");
+        } else if (status === 429) {
+          // Rate limit / Too many requests
+          toast.error("Too many login attempts. Please wait a few minutes and try again.");
+        } else if (status === 403) {
+          // Account deactivated
+          toast.error(message || "Your account has been deactivated.");
+        } else if (status === 400) {
+          // Bad request
+          toast.error(message || "Please provide valid email and password.");
+        } else {
+          // Other errors
+          toast.error(message || "An error occurred during login.");
+        }
+      } else if (err.request) {
+        // Network error
+        toast.error("Cannot connect to server. Please check your internet connection.");
+      } else {
+        // Other errors
+        toast.error("An unexpected error occurred. Please try again.");
+      }
     }
   };
 
@@ -98,13 +123,8 @@ function Login() {
           <CardTitle className="text-2xl text-center">Log In</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={onSubmit} className="space-y-4">
               <FormField
                 control={form.control}
                 name="email"
@@ -187,13 +207,24 @@ function Login() {
 
               <Button
                 type="submit"
-                disabled={loading}
-                className="w-full h-12 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white disabled:opacity-50"
+                className="w-full h-12 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white"
               >
-                {loading ? "Logging in..." : "Log In"}
+                Log In
               </Button>
             </form>
           </Form>
+
+          {/* Test Credentials - Remove in production */}
+          {import.meta.env.DEV && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-xs font-semibold text-blue-800 mb-2">Test Credentials:</p>
+              <div className="space-y-1 text-xs text-blue-700">
+                <p><strong>Admin:</strong> admin@hostel.com / password123</p>
+                <p><strong>Manager:</strong> manager1@hostel.com / password123</p>
+                <p><strong>Student:</strong> student1@example.com / password123</p>
+              </div>
+            </div>
+          )}
 
           <div className="text-center">
             <p className="text-sm text-slate-600">

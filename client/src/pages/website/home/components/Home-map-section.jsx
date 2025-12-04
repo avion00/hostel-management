@@ -12,7 +12,7 @@ const HomeMapSection = () => {
           </p>
         </div>
 
-        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-200/50">
+        <div className="bg-white rounded-sm shadow-xl overflow-hidden border border-slate-200/50">
           <div className="h-96 bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center relative">
             <iframe
               src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d54603.00271249818!2d85.28493303870859!3d27.708954252213037!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x39eb198a307baabf%3A0xb5137c1bf18db1ea!2sKathmandu%2044600!5e1!3m2!1sen!2snp!4v1755113102901!5m2!1sen!2snp"
