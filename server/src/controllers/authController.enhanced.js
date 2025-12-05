@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import db from '../config/database.js';
+import { generateUUID } from '../utils/uuid.js';
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -61,13 +62,14 @@ export const signup = async (req, res) => {
     const salt = await bcrypt.genSalt(12); // Increased from 10 to 12 for better security
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    // Generate UUID for user ID
+    const userId = generateUUID();
+
     // Create user
     const result = db.prepare(`
-      INSERT INTO users (name, email, password, phone, role)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(name, email, hashedPassword, phone, role);
-
-    const userId = result.lastInsertRowid;
+      INSERT INTO users (id, name, email, password, phone, role)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(userId, name, email, hashedPassword, phone, role);
 
     // Generate tokens
     const accessToken = generateAccessToken(userId);

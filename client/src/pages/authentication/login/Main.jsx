@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FcGoogle } from "react-icons/fc";
 import { Eye, EyeOff, Mail, Lock, Bed } from "lucide-react";
+import { setupNetworkDebugger, debugFormSubmission } from "@/utils/debugHelper";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -32,8 +33,21 @@ const loginSchema = z.object({
 
 function Login() {
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const formRef = useRef(null);
+  
+  // Setup network debugger on mount
+  useEffect(() => {
+    setupNetworkDebugger();
+    console.log("🚀 Login page mounted - Network debugger active");
+    
+    // Debug form when it's available
+    if (formRef.current) {
+      debugFormSubmission(formRef.current);
+    }
+  }, []);
 
   const form = useForm({
     resolver: zodResolver(loginSchema),
@@ -44,12 +58,16 @@ function Login() {
     },
   });
 
-  const onSubmit = async (e) => {
-    e.preventDefault();
+  const onSubmit = async (data) => {
+    console.log("🔵 Form submitted with data:", data);
+    setIsLoading(true);
     try {
-      const response = await axiosInstance.post(apis.login, form.getValues());
+      console.log("🔵 Sending login request to:", apis.login);
+      const response = await axiosInstance.post(apis.login, data);
+      console.log("🟢 Login response received:", response);
       
       if (response?.status === 200 && response?.data?.success) {
+        console.log("✅ Login successful, processing tokens...");
         const { accessToken, refreshToken, ...userData } = response.data.data;
         
         // Store tokens and user data
@@ -60,10 +78,10 @@ function Login() {
         
         toast.success("Login successful!");
         
-        // Navigate based on role
+        // Navigate based on role to appropriate dashboard
         const role = userData.role.toLowerCase();
         if (role === "student") {
-          navigate("/");
+          navigate("/dashboard/user/overview");
         } else if (role === "manager") {
           navigate("/dashboard/owner/overview");
         } else if (role === "admin") {
@@ -73,7 +91,10 @@ function Login() {
         }
       }
     } catch (err) {
-      console.error("Login error:", err);
+      console.log("🔴 Login error:", err);
+      console.log("🔴 Error response:", err.response);
+      console.log("🔴 Error status:", err.response?.status);
+      console.log("🔴 Error message:", err.response?.data?.message);
       
       // Handle different error scenarios
       if (err.response) {
@@ -82,6 +103,7 @@ function Login() {
         
         if (status === 401) {
           // Invalid credentials
+          console.log("❌ 401 - Invalid credentials");
           toast.error(message || "Invalid email or password. Please check your credentials.");
         } else if (status === 423) {
           // Account locked
@@ -106,6 +128,8 @@ function Login() {
         // Other errors
         toast.error("An unexpected error occurred. Please try again.");
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -124,7 +148,19 @@ function Login() {
         </CardHeader>
         <CardContent className="space-y-6">
           <Form {...form}>
-            <form onSubmit={onSubmit} className="space-y-4">
+            <form 
+              ref={formRef}
+              onSubmit={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log("📋 Form submit event intercepted, prevented default");
+                console.log("📋 Form valid:", form.formState.isValid);
+                console.log("📋 Form errors:", form.formState.errors);
+                form.handleSubmit(onSubmit)(e);
+                return false;
+              }} 
+              className="space-y-4"
+            >
               <FormField
                 control={form.control}
                 name="email"
@@ -207,9 +243,10 @@ function Login() {
 
               <Button
                 type="submit"
-                className="w-full h-12 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white"
+                disabled={isLoading}
+                className="w-full h-12 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Log In
+                {isLoading ? "Logging in..." : "Log In"}
               </Button>
             </form>
           </Form>

@@ -11,9 +11,9 @@ export const apiLimiter = rateLimit({
 
 // Strict rate limiter for authentication endpoints
 export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 login requests per windowMs
-  message: 'Too many login attempts from this IP, please try again after 15 minutes.',
+  windowMs: 5 * 60 * 1000, // 5 minutes (reduced from 15)
+  max: 20, // Limit each IP to 20 login requests per windowMs (increased from 5)
+  message: 'Too many login attempts from this IP, please try again after 5 minutes.',
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true, // Don't count successful requests
@@ -39,7 +39,7 @@ export const passwordResetLimiter = rateLimit({
 
 // Rate limiter for creating bookings
 export const bookingLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
+  windowMs: 60 * 60 * 10, // 1 hour
   max: 10, // Limit each IP to 10 booking requests per hour
   message: 'Too many booking requests, please try again later.',
   standardHeaders: true,

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Image Upload - Hostel Management</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .preview img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 4px;
+            border: 2px solid #ddd;
+        }
+        .response {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏨 Test Property Image Upload</h1>
+        
+        <div class="info">
+            <strong>Note:</strong> You need to be logged in as an admin to use this form. 
+            Get your token from the login API and paste it below.<br><br>
+            <strong>Image Storage:</strong> Images will be stored in <code>/uploads/properties/{property_id}/</code>
+        </div>
+
+        <form id="uploadForm">
+            <div class="form-group">
+                <label>Authorization Token *</label>
+                <input type="text" id="token" placeholder="Paste your JWT token here" required>
+            </div>
+
+            <div class="form-group">
+                <label>Manager ID *</label>
+                <input type="text" id="manager_id" placeholder="e.g., e127ba6d-27d5-458c-b5cc-5407bea64cec" required>
+            </div>
+
+            <div class="form-group">
+                <label>Property Name *</label>
+                <input type="text" id="name" placeholder="e.g., Green Valley Hostel" required>
+            </div>
+
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="description" placeholder="Modern hostel with excellent facilities"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Address *</label>
+                <input type="text" id="address" placeholder="e.g., Chowk Road, Near DU" required>
+            </div>
+
+            <div class="form-group">
+                <label>City *</label>
+                <input type="text" id="city" placeholder="e.g., Dharan" required>
+            </div>
+
+            <div class="form-group">
+                <label>State *</label>
+                <input type="text" id="state" placeholder="e.g., Province 1" required>
+            </div>
+
+            <div class="form-group">
+                <label>Pincode *</label>
+                <input type="text" id="pincode" placeholder="e.g., 56700" required>
+            </div>
+
+            <div class="form-group">
+                <label>Near College/University</label>
+                <input type="text" id="near_college" placeholder="e.g., Dharan University">
+            </div>
+
+            <div class="form-group">
+                <label>Total Rooms *</label>
+                <input type="number" id="total_rooms" placeholder="e.g., 15" required>
+            </div>
+
+            <div class="form-group">
+                <label>Starting Price (Rs.) *</label>
+                <input type="number" id="price_starting" placeholder="e.g., 8500" required>
+            </div>
+
+            <div class="form-group">
+                <label>Amenities (comma separated)</label>
+                <input type="text" id="amenities" placeholder="e.g., WiFi, AC, Parking, Gym">
+            </div>
+
+            <div class="form-group">
+                <label>Property Images * (Max 10, 5MB each)</label>
+                <input type="file" id="images" multiple accept="image/*" required>
+                <div class="preview" id="preview"></div>
+            </div>
+
+            <button type="submit" id="submitBtn">Create Property</button>
+        </form>
+
+        <div id="response"></div>
+    </div>
+
+    <script>
+        const form = document.getElementById('uploadForm');
+        const imagesInput = document.getElementById('images');
+        const preview = document.getElementById('preview');
+        const responseDiv = document.getElementById('response');
+        const submitBtn = document.getElementById('submitBtn');
+
+        // Preview images
+        imagesInput.addEventListener('change', (e) => {
+            preview.innerHTML = '';
+            const files = Array.from(e.target.files);
+            
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    preview.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            });
+        });
+
+        // Handle form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const token = document.getElementById('token').value;
+            const formData = new FormData();
+
+            // Add text fields
+            formData.append('manager_id', document.getElementById('manager_id').value);
+            formData.append('name', document.getElementById('name').value);
+            formData.append('description', document.getElementById('description').value);
+            formData.append('address', document.getElementById('address').value);
+            formData.append('city', document.getElementById('city').value);
+            formData.append('state', document.getElementById('state').value);
+            formData.append('pincode', document.getElementById('pincode').value);
+            formData.append('near_college', document.getElementById('near_college').value);
+            formData.append('total_rooms', document.getElementById('total_rooms').value);
+            formData.append('price_starting', document.getElementById('price_starting').value);
+
+            // Add amenities as JSON array
+            const amenitiesText = document.getElementById('amenities').value;
+            if (amenitiesText) {
+                const amenitiesArray = amenitiesText.split(',').map(a => a.trim());
+                formData.append('amenities', JSON.stringify(amenitiesArray));
+            }
+
+            // Add images
+            const files = imagesInput.files;
+            for (let i = 0; i < files.length; i++) {
+                formData.append('images', files[i]);
+            }
+
+            // Disable button
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creating...';
+            responseDiv.innerHTML = '';
+
+            try {
+                const response = await fetch('http://localhost:5000/api/admin/hostels', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    responseDiv.className = 'response success';
+                    responseDiv.textContent = 'Success!\n\n' + JSON.stringify(data, null, 2);
+                    form.reset();
+                    preview.innerHTML = '';
+                } else {
+                    responseDiv.className = 'response error';
+                    responseDiv.textContent = 'Error!\n\n' + JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = 'Error: ' + error.message;
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Create Property';
+            }
+        });
+    </script>
+</body>
+</html>

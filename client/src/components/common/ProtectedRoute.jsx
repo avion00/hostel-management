@@ -67,10 +67,10 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
 
   // If logged in but not authorized for this route
   if (!isAuthorized) {
-    // Redirect based on user role
+    // Redirect based on user role to their appropriate dashboard
     const userRole = user?.role?.toLowerCase();
     if (userRole === 'student') {
-      return <Navigate to="/" replace />;
+      return <Navigate to="/dashboard/user/overview" replace />;
     } else if (userRole === 'manager') {
       return <Navigate to="/dashboard/owner/overview" replace />;
     } else if (userRole === 'admin') {

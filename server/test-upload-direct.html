@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct Upload Test</title>
+</head>
+<body>
+    <h1>Test Property Creation with Images</h1>
+    
+    <form id="testForm">
+        <h3>Login First</h3>
+        <input type="email" id="email" placeholder="Email" value="admin@example.com"><br>
+        <input type="password" id="password" placeholder="Password" value="admin123"><br>
+        <button type="button" onclick="login()">Login</button>
+        <hr>
+        
+        <h3>Create Property</h3>
+        <input type="text" id="manager_id" placeholder="Manager ID" value="e127ba6d-27d5-458c-b5cc-5407bea64cec"><br>
+        <input type="text" id="name" placeholder="Property Name" value="Test Property"><br>
+        <input type="text" id="description" placeholder="Description" value="Test Description"><br>
+        <input type="text" id="address" placeholder="Address" value="Test Address"><br>
+        <input type="text" id="city" placeholder="City" value="Dharan"><br>
+        <input type="text" id="state" placeholder="State" value="Province 1"><br>
+        <input type="text" id="pincode" placeholder="Pincode" value="56700"><br>
+        <input type="number" id="total_rooms" placeholder="Total Rooms" value="10"><br>
+        <input type="number" id="price_starting" placeholder="Price" value="8500"><br>
+        <input type="file" id="images" multiple accept="image/*"><br>
+        <button type="button" onclick="createProperty()">Create Property</button>
+    </form>
+    
+    <div id="result"></div>
+    
+    <script>
+        let token = '';
+        
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    token = data.data.accessToken;
+                    document.getElementById('result').innerHTML = '<p style="color:green">Login successful!</p>';
+                } else {
+                    document.getElementById('result').innerHTML = '<p style="color:red">Login failed: ' + data.message + '</p>';
+                }
+            } catch (error) {
+                document.getElementById('result').innerHTML = '<p style="color:red">Login error: ' + error.message + '</p>';
+            }
+        }
+        
+        async function createProperty() {
+            if (!token) {
+                alert('Please login first');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('manager_id', document.getElementById('manager_id').value);
+            formData.append('name', document.getElementById('name').value);
+            formData.append('description', document.getElementById('description').value);
+            formData.append('address', document.getElementById('address').value);
+            formData.append('city', document.getElementById('city').value);
+            formData.append('state', document.getElementById('state').value);
+            formData.append('pincode', document.getElementById('pincode').value);
+            formData.append('total_rooms', document.getElementById('total_rooms').value);
+            formData.append('price_starting', document.getElementById('price_starting').value);
+            formData.append('amenities', JSON.stringify(['WiFi', 'AC']));
+            
+            const files = document.getElementById('images').files;
+            for (let i = 0; i < files.length; i++) {
+                formData.append('images', files[i]);
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/admin/hostels', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                console.log('Response:', data);
+                
+                if (data.success) {
+                    document.getElementById('result').innerHTML = '<p style="color:green">Property created successfully!</p><pre>' + JSON.stringify(data.data, null, 2) + '</pre>';
+                } else {
+                    document.getElementById('result').innerHTML = '<p style="color:red">Failed: ' + data.message + '</p>';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = '<p style="color:red">Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,79 +1,243 @@
-import db from '../config/database.js';
+import db from '../config/database-uuid.js';
+import { generateUUID } from '../utils/uuid.js';
 
 // @desc    Create new booking
 // @route   POST /api/bookings
 // @access  Private (Student)
 export const createBooking = async (req, res) => {
   try {
-    const { property_id, room_id, check_in_date, months } = req.body;
+    const {
+      property_id,
+      room_type_id,
+      start_date,
+      duration_type,
+      duration_value,
+      occupants = 1,
+      special_requests,
+      preferred_floor,
+      check_in_time,
+      sharing_preference,
+      payment_method,
+      pay_mode,
+      discount_code,
+      emergency_contact_name,
+      emergency_contact_phone,
+      emergency_contact_relation,
+      id_document_type,
+      id_document_number,
+      heard_from,
+      notes_internal,
+    } = req.body;
+
     const student_id = req.user.id;
-    
-    // Validation
-    if (!property_id || !room_id || !check_in_date || !months) {
-      return res.status(400).json({ 
+
+    // Basic validation
+    if (!property_id || !room_type_id || !start_date || !duration_type || !duration_value) {
+      return res.status(400).json({
         success: false,
-        message: 'Please provide all required fields' 
+        message: 'Please provide property_id, room_type_id, start_date, duration_type and duration_value',
       });
     }
-    
-    // Check if room exists and is available
-    const room = db.prepare('SELECT * FROM rooms WHERE id = ? AND property_id = ?').get(room_id, property_id);
-    
-    if (!room) {
-      return res.status(404).json({ 
+
+    if (!['daily', 'weekly', 'monthly'].includes(duration_type)) {
+      return res.status(400).json({
         success: false,
-        message: 'Room not found' 
+        message: 'Invalid duration_type. Allowed values are daily, weekly, monthly',
       });
     }
-    
-    if (!room.is_available || room.occupied >= room.capacity) {
-      return res.status(400).json({ 
+
+    if (isNaN(duration_value) || duration_value <= 0) {
+      return res.status(400).json({
         success: false,
-        message: 'Room is not available' 
+        message: 'duration_value must be a positive number',
       });
     }
-    
-    // Calculate total amount
-    const total_amount = room.price_per_month * months;
-    
+
+    const bedsRequested = Number(occupants) || 1;
+
+    // Check property exists
+    const property = db
+      .prepare('SELECT id, manager_id, name, available_beds FROM properties WHERE id = ?')
+      .get(property_id);
+
+    if (!property) {
+      return res.status(404).json({
+        success: false,
+        message: 'Property not found',
+      });
+    }
+
+    // Check room type exists and has available beds
+    const roomType = db
+      .prepare(
+        'SELECT id, name, price_per_day, price_per_week, price_per_month, beds_available FROM room_types WHERE id = ? AND property_id = ?'
+      )
+      .get(room_type_id, property_id);
+
+    if (!roomType) {
+      return res.status(404).json({
+        success: false,
+        message: 'Room type not found for this property',
+      });
+    }
+
+    if (roomType.beds_available < bedsRequested) {
+      return res.status(400).json({
+        success: false,
+        message: 'Selected room type does not have enough available beds',
+      });
+    }
+
+    // Calculate end_date and total_amount
+    const start = new Date(start_date);
+    if (isNaN(start.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid start_date format. Expected YYYY-MM-DD',
+      });
+    }
+
+    const end = new Date(start);
+    let total_amount = 0;
+
+    if (duration_type === 'daily') {
+      end.setDate(end.getDate() + duration_value);
+      total_amount = (roomType.price_per_day || 0) * duration_value * bedsRequested;
+    } else if (duration_type === 'weekly') {
+      end.setDate(end.getDate() + duration_value * 7);
+      total_amount = (roomType.price_per_week || 0) * duration_value * bedsRequested;
+    } else if (duration_type === 'monthly') {
+      end.setMonth(end.getMonth() + duration_value);
+      total_amount = (roomType.price_per_month || 0) * duration_value * bedsRequested;
+    }
+
+    if (!total_amount || total_amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unable to calculate total amount. Please ensure room type has valid pricing.',
+      });
+    }
+
+    const end_date = end.toISOString().slice(0, 10); // YYYY-MM-DD
+
+    const bookingId = generateUUID();
+
     // Create booking
     const stmt = db.prepare(`
-      INSERT INTO bookings (student_id, property_id, room_id, check_in_date, total_amount, status)
-      VALUES (?, ?, ?, ?, ?, 'pending')
+      INSERT INTO bookings (
+        id,
+        student_id,
+        property_id,
+        room_type_id,
+        start_date,
+        end_date,
+        duration_type,
+        duration_value,
+        total_amount,
+        payment_status,
+        booking_status,
+        occupants,
+        special_requests,
+        preferred_floor,
+        check_in_time,
+        sharing_preference,
+        payment_method,
+        pay_mode,
+        discount_code,
+        emergency_contact_name,
+        emergency_contact_phone,
+        emergency_contact_relation,
+        id_document_type,
+        id_document_number,
+        heard_from,
+        notes_internal
+      )
+      VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      )
     `);
-    
-    const result = stmt.run(student_id, property_id, room_id, check_in_date, total_amount);
-    
-    // Update room occupancy
-    db.prepare('UPDATE rooms SET occupied = occupied + 1, is_available = CASE WHEN occupied + 1 >= capacity THEN 0 ELSE 1 END WHERE id = ?').run(room_id);
-    
-    // Update property available rooms
-    db.prepare('UPDATE properties SET available_rooms = (SELECT COUNT(*) FROM rooms WHERE property_id = ? AND is_available = 1) WHERE id = ?').run(property_id, property_id);
-    
+
+    const result = stmt.run(
+      bookingId,
+      student_id,
+      property_id,
+      room_type_id,
+      start_date,
+      end_date,
+      duration_type,
+      duration_value,
+      total_amount,
+      'pending',
+      'pending',
+      bedsRequested,
+      special_requests || null,
+      preferred_floor || null,
+      check_in_time || null,
+      sharing_preference || null,
+      payment_method || null,
+      pay_mode || null,
+      discount_code || null,
+      emergency_contact_name || null,
+      emergency_contact_phone || null,
+      emergency_contact_relation || null,
+      id_document_type || null,
+      id_document_number || null,
+      heard_from || null,
+      notes_internal || null
+    );
+
+    // Update room type availability
+    db.prepare(
+      'UPDATE room_types SET beds_available = beds_available - ? WHERE id = ? AND property_id = ?'
+    ).run(bedsRequested, room_type_id, property_id);
+
+    // Update property available beds
+    db.prepare('UPDATE properties SET available_beds = available_beds - ? WHERE id = ?').run(
+      bedsRequested,
+      property_id
+    );
+
     // Create notification for manager
-    const property = db.prepare('SELECT manager_id, name FROM properties WHERE id = ?').get(property_id);
-    db.prepare(`
-      INSERT INTO notifications (user_id, title, message, type)
-      VALUES (?, ?, ?, 'booking')
-    `).run(property.manager_id, 'New Booking Request', `New booking request for ${property.name}`, 'booking');
-    
-    const booking = db.prepare(`
-      SELECT b.*, p.name as property_name, p.address, r.room_number, r.room_type
+    if (property.manager_id) {
+      db.prepare(
+        `
+        INSERT INTO notifications (user_id, title, message, type)
+        VALUES (?, ?, ?, 'booking')
+      `
+      ).run(
+        property.manager_id,
+        'New Booking Request',
+        `New booking request for ${property.name}`,
+        'booking'
+      );
+    }
+
+    const booking = db
+      .prepare(
+        `
+      SELECT 
+        b.*,
+        p.name as property_name,
+        p.address,
+        p.city,
+        rt.name as room_type_name
       FROM bookings b
-      LEFT JOIN properties p ON b.property_id = p.id
-      LEFT JOIN rooms r ON b.room_id = r.id
+      JOIN properties p ON b.property_id = p.id
+      JOIN room_types rt ON b.room_type_id = rt.id
       WHERE b.id = ?
-    `).get(result.lastInsertRowid);
-    
+    `
+      )
+      .get(bookingId);
+
     res.status(201).json({
       success: true,
-      data: booking
+      data: booking,
     });
   } catch (error) {
     console.error('Create booking error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message 
+    res.status(500).json({
+      success: false,
+      message: error.message,
     });
   }
 };
@@ -86,13 +250,45 @@ export const getStudentBookings = async (req, res) => {
     const student_id = req.user.id;
     
     const bookings = db.prepare(`
-      SELECT b.*, 
-        p.name as property_name, p.address, p.city, p.images,
-        r.room_number, r.room_type,
-        u.name as manager_name, u.phone as manager_phone
+      SELECT
+        b.id,
+        b.student_id,
+        b.property_id,
+        b.room_type_id,
+        b.start_date,
+        b.end_date,
+        b.duration_type,
+        b.duration_value,
+        b.occupants,
+        b.total_amount,
+        b.payment_status,
+        b.booking_status,
+        b.special_requests,
+        b.preferred_floor,
+        b.check_in_time,
+        b.sharing_preference,
+        b.payment_method,
+        b.pay_mode,
+        b.discount_code,
+        b.emergency_contact_name,
+        b.emergency_contact_phone,
+        b.emergency_contact_relation,
+        b.id_document_type,
+        b.id_document_number,
+        b.heard_from,
+        b.notes_internal,
+        b.created_at,
+        b.updated_at,
+        p.name as property_name,
+        p.address,
+        p.city,
+        p.images,
+        rt.name as room_type_name,
+        u.name as manager_name,
+        u.phone as manager_phone
       FROM bookings b
       LEFT JOIN properties p ON b.property_id = p.id
-      LEFT JOIN rooms r ON b.room_id = r.id
+      LEFT JOIN room_types rt ON b.room_type_id = rt.id
       LEFT JOIN users u ON p.manager_id = u.id
       WHERE b.student_id = ?
       ORDER BY b.created_at DESC

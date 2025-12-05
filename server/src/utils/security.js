@@ -7,7 +7,7 @@ import db from '../config/database.js';
 const ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutes
 const REFRESH_TOKEN_EXPIRY = '7d'; // 7 days
 const MAX_LOGIN_ATTEMPTS = 5;
-const LOCK_TIME = 15 * 60 * 1000; // 15 minutes in milliseconds
+const LOCK_TIME = 1 * 60 * 100; // 1 minute in milliseconds
 
 /**
  * Generate Access Token (short-lived)

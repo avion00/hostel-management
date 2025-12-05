@@ -18,7 +18,7 @@ const initDatabase = () => {
     // Users table (students, hostel managers, super admin)
     db.exec(`
       CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
@@ -31,25 +31,33 @@ const initDatabase = () => {
       );
     `);
 
-    // Properties/Hostels table
+    // Properties/Hostels table (Enhanced)
     db.exec(`
       CREATE TABLE IF NOT EXISTS properties (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        manager_id INTEGER NOT NULL,
+        id TEXT PRIMARY KEY,
+        manager_id TEXT NOT NULL,
         name TEXT NOT NULL,
         description TEXT,
         address TEXT NOT NULL,
         city TEXT NOT NULL,
-        state TEXT NOT NULL,
-        pincode TEXT NOT NULL,
+        area TEXT,
+        state TEXT,
+        pincode TEXT,
         latitude REAL,
         longitude REAL,
         near_college TEXT,
-        total_rooms INTEGER NOT NULL,
-        available_rooms INTEGER NOT NULL,
+        established_year INTEGER,
+        rating REAL DEFAULT 0,
+        total_rooms INTEGER DEFAULT 0,
+        available_rooms INTEGER DEFAULT 0,
+        total_beds INTEGER DEFAULT 0,
+        available_beds INTEGER DEFAULT 0,
+        staff_count INTEGER DEFAULT 0,
+        price_starting REAL,
         amenities TEXT,
         images TEXT,
-        price_per_month REAL NOT NULL,
+        rules TEXT,
+        status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
         is_active INTEGER DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -57,23 +65,24 @@ const initDatabase = () => {
       );
     `);
 
-    // Rooms table
+    // Room Types table (replaces individual rooms)
     db.exec(`
-      CREATE TABLE IF NOT EXISTS rooms (
+      CREATE TABLE IF NOT EXISTS room_types (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         property_id INTEGER NOT NULL,
-        room_number TEXT NOT NULL,
-        room_type TEXT NOT NULL CHECK(room_type IN ('single', 'double', 'triple', 'quad')),
-        floor INTEGER,
-        capacity INTEGER NOT NULL,
-        occupied INTEGER DEFAULT 0,
+        name TEXT NOT NULL,
+        description TEXT,
         price_per_month REAL NOT NULL,
+        price_per_week REAL,
+        price_per_day REAL,
+        total_beds INTEGER NOT NULL DEFAULT 0,
+        beds_available INTEGER NOT NULL DEFAULT 0,
         amenities TEXT,
+        images TEXT,
         is_available INTEGER DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
-        UNIQUE(property_id, room_number)
+        FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE
       );
     `);
 
@@ -83,35 +92,62 @@ const initDatabase = () => {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id INTEGER NOT NULL,
         property_id INTEGER NOT NULL,
-        room_id INTEGER NOT NULL,
-        booking_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-        check_in_date DATE NOT NULL,
-        check_out_date DATE,
-        status TEXT NOT NULL CHECK(status IN ('pending', 'confirmed', 'active', 'completed', 'cancelled')),
+        room_type_id INTEGER NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE,
+        duration_type TEXT NOT NULL CHECK(duration_type IN ('daily', 'weekly', 'monthly')) DEFAULT 'monthly',
         total_amount REAL NOT NULL,
+        payment_status TEXT DEFAULT 'pending' CHECK(payment_status IN ('pending', 'partial', 'completed', 'refunded')),
+        booking_status TEXT NOT NULL CHECK(booking_status IN ('pending', 'confirmed', 'cancelled', 'rejected', 'completed')) DEFAULT 'pending',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
-        FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
+        FOREIGN KEY (room_type_id) REFERENCES room_types(id) ON DELETE CASCADE
       );
     `);
+
+    // Add additional booking detail columns if they don't exist
+    const bookingExtraColumns = [
+      "ALTER TABLE bookings ADD COLUMN duration_value INTEGER;",
+      "ALTER TABLE bookings ADD COLUMN occupants INTEGER DEFAULT 1;",
+      "ALTER TABLE bookings ADD COLUMN special_requests TEXT;",
+      "ALTER TABLE bookings ADD COLUMN preferred_floor TEXT;",
+      "ALTER TABLE bookings ADD COLUMN check_in_time TEXT;",
+      "ALTER TABLE bookings ADD COLUMN sharing_preference TEXT;",
+      "ALTER TABLE bookings ADD COLUMN payment_method TEXT;",
+      "ALTER TABLE bookings ADD COLUMN pay_mode TEXT;",
+      "ALTER TABLE bookings ADD COLUMN discount_code TEXT;",
+      "ALTER TABLE bookings ADD COLUMN emergency_contact_name TEXT;",
+      "ALTER TABLE bookings ADD COLUMN emergency_contact_phone TEXT;",
+      "ALTER TABLE bookings ADD COLUMN emergency_contact_relation TEXT;",
+      "ALTER TABLE bookings ADD COLUMN id_document_type TEXT;",
+      "ALTER TABLE bookings ADD COLUMN id_document_number TEXT;",
+      "ALTER TABLE bookings ADD COLUMN heard_from TEXT;",
+      "ALTER TABLE bookings ADD COLUMN notes_internal TEXT;"
+    ];
+
+    for (const alterSql of bookingExtraColumns) {
+      try {
+        db.exec(alterSql);
+      } catch (e) {
+        // Column already exists, ignore
+      }
+    }
 
     // Payments table
     db.exec(`
       CREATE TABLE IF NOT EXISTS payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         booking_id INTEGER NOT NULL,
-        student_id INTEGER NOT NULL,
         amount REAL NOT NULL,
-        payment_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-        payment_method TEXT NOT NULL CHECK(payment_method IN ('cash', 'card', 'upi', 'bank_transfer')),
-        payment_status TEXT NOT NULL CHECK(payment_status IN ('pending', 'completed', 'failed', 'refunded')),
-        transaction_id TEXT,
+        payment_gateway TEXT CHECK(payment_gateway IN ('khalti', 'esewa', 'fonepay', 'stripe', 'cash', 'bank_transfer')),
+        transaction_id TEXT UNIQUE,
+        status TEXT NOT NULL CHECK(status IN ('pending', 'success', 'failed', 'refunded')) DEFAULT 'pending',
+        paid_at DATETIME,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
-        FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+        FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
       );
     `);
 
@@ -144,11 +180,89 @@ const initDatabase = () => {
       );
     `);
 
+    // Subscription Plans table (for hostel owners)
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS subscription_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        price REAL NOT NULL,
+        duration_days INTEGER NOT NULL,
+        max_hostels INTEGER NOT NULL DEFAULT 1,
+        max_rooms INTEGER NOT NULL DEFAULT 10,
+        features TEXT,
+        status TEXT DEFAULT 'active' CHECK(status IN ('active', 'inactive')),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // User Subscriptions table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS user_subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        plan_id INTEGER NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE NOT NULL,
+        status TEXT DEFAULT 'active' CHECK(status IN ('active', 'expired', 'cancelled')),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE CASCADE
+      );
+    `);
+
+    // Documents table (for verification)
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('citizenship', 'student_id', 'license', 'passport', 'other')),
+        file_url TEXT NOT NULL,
+        status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
+        remarks TEXT,
+        verified_by INTEGER,
+        verified_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL
+      );
+    `);
+
+    // CMS (Content Management System) table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS cms (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        banner_title TEXT,
+        banner_subtitle TEXT,
+        banner_image TEXT,
+        about_us TEXT,
+        contact_email TEXT,
+        contact_phone TEXT,
+        contact_address TEXT,
+        faq TEXT,
+        terms TEXT,
+        privacy_policy TEXT,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Insert default CMS data if not exists
+    const cmsExists = db.prepare('SELECT COUNT(*) as count FROM cms').get();
+    if (cmsExists.count === 0) {
+      db.exec(`
+        INSERT INTO cms (banner_title, banner_subtitle, contact_email) 
+        VALUES ('Welcome to HostelHub', 'Find your perfect hostel accommodation', 'info@hostelhub.com');
+      `);
+    }
+
     // Refresh Tokens table (for JWT refresh token rotation)
     db.exec(`
       CREATE TABLE IF NOT EXISTS refresh_tokens (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
+        user_id TEXT NOT NULL,
         token TEXT UNIQUE NOT NULL,
         expires_at DATETIME NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -161,7 +275,7 @@ const initDatabase = () => {
       CREATE TABLE IF NOT EXISTS token_blacklist (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         token TEXT UNIQUE NOT NULL,
-        user_id INTEGER,
+        user_id TEXT,
         reason TEXT,
         blacklisted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         expires_at DATETIME NOT NULL,
@@ -198,14 +312,19 @@ const initDatabase = () => {
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
       CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
       CREATE INDEX IF NOT EXISTS idx_properties_manager ON properties(manager_id);
-      CREATE INDEX IF NOT EXISTS idx_properties_location ON properties(city, pincode);
-      CREATE INDEX IF NOT EXISTS idx_rooms_property ON rooms(property_id);
+      CREATE INDEX IF NOT EXISTS idx_properties_location ON properties(city);
+      CREATE INDEX IF NOT EXISTS idx_properties_status ON properties(status);
+      CREATE INDEX IF NOT EXISTS idx_room_types_property ON room_types(property_id);
       CREATE INDEX IF NOT EXISTS idx_bookings_student ON bookings(student_id);
       CREATE INDEX IF NOT EXISTS idx_bookings_property ON bookings(property_id);
-      CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
+      CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(booking_status);
       CREATE INDEX IF NOT EXISTS idx_payments_booking ON payments(booking_id);
+      CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
       CREATE INDEX IF NOT EXISTS idx_reviews_property ON reviews(property_id);
       CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+      CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON user_subscriptions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_documents_user ON documents(user_id);
+      CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
       CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
       CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
       CREATE INDEX IF NOT EXISTS idx_token_blacklist_token ON token_blacklist(token);

@@ -19,9 +19,9 @@ export default function MobileSidebar() {
   const { role: userType } = useSelector((state) => state?.auth?.user);
 
   const navItems =
-    userType === "User"
+    userType === "student"
       ? userNavItems
-      : userType === "Owner"
+      : userType === "manager"
       ? ownerNavItems
       : adminNavItems;
 

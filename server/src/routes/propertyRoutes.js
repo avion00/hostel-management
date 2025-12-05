@@ -8,6 +8,7 @@ import {
   getPropertiesByManager
 } from '../controllers/propertyController.js';
 import { protect, authorize } from '../middleware/auth.js';
+import uploadProperty from '../middleware/uploadProperty.js';
 
 const router = express.Router();
 
@@ -111,8 +112,10 @@ router.get('/', getProperties);
  *         name: id
  *         required: true
  *         schema:
- *           type: integer
- *         description: Property ID
+ *           type: string
+ *           format: uuid
+ *         description: Property ID (UUID)
+ *         example: "36b395b4-0930-4ef4-88db-d74bb9df5e8c"
  *     responses:
  *       200:
  *         description: Property details retrieved successfully
@@ -151,14 +154,14 @@ router.get('/:id', getPropertyById);
  * /properties:
  *   post:
  *     tags: [Properties]
- *     summary: Create new property
- *     description: Create a new property/hostel (Manager/Admin only)
+ *     summary: Create new property with image upload
+ *     description: Create a new property/hostel with multiple image uploads (Manager/Admin only)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required:
@@ -168,7 +171,7 @@ router.get('/:id', getPropertyById);
  *               - state
  *               - pincode
  *               - total_rooms
- *               - price_per_month
+ *               - price_starting
  *             properties:
  *               name:
  *                 type: string
@@ -201,16 +204,16 @@ router.get('/:id', getPropertyById);
  *                 type: integer
  *                 example: 15
  *               amenities:
- *                 type: array
- *                 items:
- *                   type: string
- *                 example: ["WiFi", "AC", "Parking"]
+ *                 type: string
+ *                 description: JSON array as string
+ *                 example: '["WiFi", "AC", "Parking"]'
  *               images:
  *                 type: array
  *                 items:
  *                   type: string
- *                 example: ["https://..."]
- *               price_per_month:
+ *                   format: binary
+ *                 description: Property images (max 10, 5MB each)
+ *               price_starting:
  *                 type: number
  *                 example: 8500
  *     responses:
@@ -231,15 +234,15 @@ router.get('/:id', getPropertyById);
  *       403:
  *         description: Forbidden (not manager or admin)
  */
-router.post('/', protect, authorize('manager', 'admin'), createProperty);
+router.post('/', protect, authorize('manager', 'admin'), uploadProperty.array('images', 10), createProperty);
 
 /**
  * @swagger
  * /properties/{id}:
  *   put:
  *     tags: [Properties]
- *     summary: Update property
- *     description: Update property details (Manager/Admin only)
+ *     summary: Update property with image upload
+ *     description: Update property details and add new images (Manager/Admin only)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -247,12 +250,14 @@ router.post('/', protect, authorize('manager', 'admin'), createProperty);
  *         name: id
  *         required: true
  *         schema:
- *           type: integer
- *         description: Property ID
+ *           type: string
+ *           format: uuid
+ *         description: Property ID (UUID)
+ *         example: "36b395b4-0930-4ef4-88db-d74bb9df5e8c"
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             properties:
@@ -260,12 +265,17 @@ router.post('/', protect, authorize('manager', 'admin'), createProperty);
  *                 type: string
  *               description:
  *                 type: string
- *               price_per_month:
+ *               price_starting:
  *                 type: number
  *               amenities:
+ *                 type: string
+ *                 description: JSON array as string
+ *               images:
  *                 type: array
  *                 items:
  *                   type: string
+ *                   format: binary
+ *                 description: New images to add (max 10, 5MB each)
  *     responses:
  *       200:
  *         description: Property updated successfully
@@ -274,7 +284,7 @@ router.post('/', protect, authorize('manager', 'admin'), createProperty);
  *       404:
  *         description: Property not found
  */
-router.put('/:id', protect, authorize('manager', 'admin'), updateProperty);
+router.put('/:id', protect, authorize('manager', 'admin'), uploadProperty.array('images', 10), updateProperty);
 
 /**
  * @swagger
@@ -290,8 +300,10 @@ router.put('/:id', protect, authorize('manager', 'admin'), updateProperty);
  *         name: id
  *         required: true
  *         schema:
- *           type: integer
- *         description: Property ID
+ *           type: string
+ *           format: uuid
+ *         description: Property ID (UUID)
+ *         example: "36b395b4-0930-4ef4-88db-d74bb9df5e8c"
  *     responses:
  *       200:
  *         description: Property deleted successfully
@@ -316,8 +328,10 @@ router.delete('/:id', protect, authorize('manager', 'admin'), deleteProperty);
  *         name: managerId
  *         required: true
  *         schema:
- *           type: integer
- *         description: Manager ID
+ *           type: string
+ *           format: uuid
+ *         description: Manager ID (UUID)
+ *         example: "e127ba6d-27d5-458c-b5cc-5407bea64cec"
  *     responses:
  *       200:
  *         description: Properties retrieved successfully
@@ -336,6 +350,6 @@ router.delete('/:id', protect, authorize('manager', 'admin'), deleteProperty);
  *       403:
  *         description: Not authorized to view these properties
  */
-router.get('/manager/:managerId', protect, getPropertiesByManager);
+router.get('/manager/:managerId', protect, authorize('manager', 'admin'), getPropertiesByManager);
 
 export default router;

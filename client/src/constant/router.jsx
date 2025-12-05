@@ -12,6 +12,7 @@ import About from "@/pages/website/about/Main";
 import Contact from "@/pages/website/contact/Main";
 import ForPartners from "@/pages/website/for-partners/Main";
 import FindHostelsPage from "@/pages/website/find-hostels/Main";
+import PropertyDetailsPage from "@/pages/website/property-details/Main";
 import DashboardLayout from "@/components/layout/Dashboard-layout";
 import UserOverviewPage from "@/pages/dashboard/user/overview/Main";
 import UserBookingPage from "@/pages/dashboard/user/booking/Main";
@@ -24,8 +25,11 @@ import OwnerBookingPage from "@/pages/dashboard/owner/bookings/Main";
 import OwnerPaymentPage from "@/pages/dashboard/owner/payments/Main";
 import OwnerProfilePage from "@/pages/dashboard/owner/profile/Main";
 import AdminOverviewPage from "@/pages/dashboard/super-admin/overview/Main";
-import AdminUserManagementPage from "@/pages/dashboard/super-admin/user-management/Main";
+import AdminUserManagementPage from "@/pages/dashboard/super-admin/users/UserManagement";
 import AdminPropertiesPage from "@/pages/dashboard/super-admin/properties/Main";
+import AddPropertyPage from "@/pages/dashboard/super-admin/properties/AddProperty";
+import ViewPropertyPage from "@/pages/dashboard/super-admin/properties/ViewProperty";
+import EditPropertyPage from "@/pages/dashboard/super-admin/properties/EditProperty";
 import AdminPaymentPage from "@/pages/dashboard/super-admin/payments/Main";
 import AdminAnalyticsPage from "@/pages/dashboard/super-admin/analytics/Main";
 import AdminSystemPage from "@/pages/dashboard/super-admin/system/Main";
@@ -56,6 +60,10 @@ const router = createBrowserRouter([
       {
         path: "/find-hostels",
         element: <FindHostelsPage />,
+      },
+      {
+        path: "/hostel/:id",
+        element: <PropertyDetailsPage />,
       },
       {
         path: "/for-partners",
@@ -144,12 +152,24 @@ const router = createBrowserRouter([
         element: <AdminOverviewPage />,
       },
       {
-        path: "User-management",
+        path: "users",
         element: <AdminUserManagementPage />,
       },
       {
         path: "properties",
         element: <AdminPropertiesPage />,
+      },
+      {
+        path: "properties/add",
+        element: <AddPropertyPage />,
+      },
+      {
+        path: "properties/:id",
+        element: <ViewPropertyPage />,
+      },
+      {
+        path: "properties/:id/edit",
+        element: <EditPropertyPage />,
       },
       {
         path: "payments",

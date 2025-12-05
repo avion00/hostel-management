@@ -63,15 +63,13 @@ export const signup = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // Generate UUID
-    const uuid = generateUUID();
+    const userId = generateUUID();
 
     // Create user
     const result = db.prepare(`
-      INSERT INTO users (uuid, name, email, password, phone, role)
+      INSERT INTO users (id, name, email, password, phone, role)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(uuid, name, email, hashedPassword, phone, role);
-
-    const userId = result.lastInsertRowid;
+    `).run(userId, name, email, hashedPassword, phone, role);
 
     // Generate tokens
     const accessToken = generateAccessToken(userId);
@@ -79,7 +77,7 @@ export const signup = async (req, res) => {
 
     // Get user data (without password)
     const user = db.prepare(`
-      SELECT uuid, name, email, phone, role, avatar, is_active, created_at
+      SELECT id, name, email, phone, role, avatar, is_active, created_at
       FROM users WHERE id = ?
     `).get(userId);
 
@@ -133,7 +131,7 @@ export const login = async (req, res) => {
 
     // Find user
     const user = db.prepare(`
-      SELECT id, uuid, name, email, password, phone, role, avatar, is_active
+      SELECT id, name, email, password, phone, role, avatar, is_active
       FROM users WHERE email = ?
     `).get(email);
 
@@ -342,7 +340,7 @@ export const logoutAll = async (req, res) => {
 export const getMe = async (req, res) => {
   try {
     const user = db.prepare(`
-      SELECT uuid, name, email, phone, role, avatar, is_active, created_at
+      SELECT id, name, email, phone, role, avatar, is_active, created_at
       FROM users WHERE id = ?
     `).get(req.user.id);
 

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Verify Image Display</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .property-card { 
+            border: 1px solid #ddd; 
+            padding: 15px; 
+            margin: 10px 0; 
+            border-radius: 8px;
+        }
+        .property-images {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .property-image {
+            width: 150px;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid #ddd;
+        }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Verify Image Display System</h1>
+    
+    <button onclick="testImageDisplay()">Load Properties with Images</button>
+    <div id="result"></div>
+
+    <script>
+        async function testImageDisplay() {
+            const result = document.getElementById('result');
+            
+            try {
+                // 1. Login
+                result.innerHTML = '<p>Logging in...</p>';
+                const loginRes = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'admin@hostel.com',
+                        password: 'admin123'
+                    })
+                });
+                const loginData = await loginRes.json();
+                
+                if (!loginData.success) {
+                    result.innerHTML = '<p class="error">Login failed</p>';
+                    return;
+                }
+                
+                const token = loginData.data.accessToken;
+                result.innerHTML = '<p class="success">✅ Login successful</p>';
+                
+                // 2. Get properties
+                result.innerHTML += '<p>Loading properties...</p>';
+                const propertiesRes = await fetch('http://localhost:5000/api/admin/hostels', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const propertiesData = await propertiesRes.json();
+                
+                if (propertiesData.success && propertiesData.data.hostels) {
+                    result.innerHTML = '<p class="success">✅ Properties loaded</p>';
+                    
+                    // Display properties with images
+                    propertiesData.data.hostels.forEach(property => {
+                        const propertyDiv = document.createElement('div');
+                        propertyDiv.className = 'property-card';
+                        
+                        let html = `
+                            <h3>${property.name}</h3>
+                            <p>Status: ${property.status}</p>
+                            <p>Location: ${property.city}, ${property.state}</p>
+                        `;
+                        
+                        if (property.images && property.images.length > 0) {
+                            html += '<p class="success">Images found: ' + property.images.length + '</p>';
+                            html += '<div class="property-images">';
+                            
+                            property.images.forEach((image, index) => {
+                                const imageUrl = 'http://localhost:5000' + image;
+                                html += `
+                                    <div>
+                                        <img 
+                                            src="${imageUrl}" 
+                                            alt="Image ${index + 1}"
+                                            class="property-image"
+                                            onerror="this.src='https://via.placeholder.com/150'; this.style.border='2px solid red';"
+                                        />
+                                        <p style="font-size: 10px; word-break: break-all;">${image}</p>
+                                    </div>
+                                `;
+                            });
+                            
+                            html += '</div>';
+                        } else {
+                            html += '<p class="error">No images found</p>';
+                        }
+                        
+                        propertyDiv.innerHTML = html;
+                        result.appendChild(propertyDiv);
+                    });
+                    
+                    if (propertiesData.data.hostels.length === 0) {
+                        result.innerHTML += '<p>No properties found. Create one first!</p>';
+                    }
+                } else {
+                    result.innerHTML += '<p class="error">Failed to load properties</p>';
+                }
+                
+            } catch (error) {
+                result.innerHTML += '<p class="error">Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

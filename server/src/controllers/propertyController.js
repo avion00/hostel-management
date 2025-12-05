@@ -1,4 +1,11 @@
 import db from '../config/database.js';
+import { generateUUID } from '../utils/uuid.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // @desc    Get all properties (with search and filters)
 // @route   GET /api/properties
@@ -45,18 +52,19 @@ export const getProperties = async (req, res) => {
     
     // Price range filter
     if (min_price) {
-      query += ` AND p.price_per_month >= ?`;
+      query += ` AND p.price_starting >= ?`;
       params.push(parseFloat(min_price));
     }
     
     if (max_price) {
-      query += ` AND p.price_per_month <= ?`;
+      query += ` AND p.price_starting <= ?`;
       params.push(parseFloat(max_price));
     }
     
     // Get total count
     const countQuery = query.replace(/SELECT.*FROM/, 'SELECT COUNT(*) as total FROM');
-    const { total } = db.prepare(countQuery).get(...params);
+    const countResult = db.prepare(countQuery).get(...params);
+    const total = countResult?.total || 0;
     
     // Add pagination
     const offset = (page - 1) * limit;
@@ -157,15 +165,18 @@ export const getPropertyById = async (req, res) => {
 // @route   POST /api/properties
 // @access  Private (Manager, Admin)
 export const createProperty = async (req, res) => {
+  let propertyId = null;
+  let tempFiles = [];
+
   try {
     const {
       name, description, address, city, state, pincode,
       latitude, longitude, near_college, total_rooms,
-      amenities, images, price_per_month
+      amenities, price_starting
     } = req.body;
     
     // Validation
-    if (!name || !address || !city || !state || !pincode || !total_rooms || !price_per_month) {
+    if (!name || !address || !city || !total_rooms || !price_starting) {
       return res.status(400).json({ 
         success: false,
         message: 'Please provide all required fields' 
@@ -173,34 +184,69 @@ export const createProperty = async (req, res) => {
     }
     
     const manager_id = req.user.role === 'admin' ? req.body.manager_id : req.user.id;
+    propertyId = generateUUID();
+    
+    // Store temp files info
+    if (req.files && req.files.length > 0) {
+      tempFiles = req.files.map(file => ({
+        tempPath: file.path,
+        filename: file.filename
+      }));
+    }
+
+    // Create property-specific directory
+    const propertyDir = path.join(__dirname, '../../uploads/properties', propertyId);
+    if (!fs.existsSync(propertyDir)) {
+      fs.mkdirSync(propertyDir, { recursive: true });
+    }
+
+    // Move files and generate URLs
+    let imageUrls = [];
+    if (tempFiles.length > 0) {
+      for (const fileInfo of tempFiles) {
+        const newPath = path.join(propertyDir, fileInfo.filename);
+        
+        // Move file from temp to property folder
+        if (fs.existsSync(fileInfo.tempPath)) {
+          fs.renameSync(fileInfo.tempPath, newPath);
+        }
+        
+        // Generate URL
+        imageUrls.push(`/uploads/properties/${propertyId}/${fileInfo.filename}`);
+      }
+    }
+
+    // Convert amenities to JSON string
+    const amenitiesStr = amenities ? JSON.stringify(typeof amenities === 'string' ? JSON.parse(amenities) : amenities) : null;
     
     const stmt = db.prepare(`
       INSERT INTO properties (
-        manager_id, name, description, address, city, state, pincode,
+        id, manager_id, name, description, address, city, state, pincode,
         latitude, longitude, near_college, total_rooms, available_rooms,
-        amenities, images, price_per_month
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        amenities, images, price_starting
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
-    const result = stmt.run(
+    stmt.run(
+      propertyId,
       manager_id,
       name,
       description || null,
       address,
       city,
-      state,
-      pincode,
+      state || null,
+      pincode || null,
       latitude || null,
       longitude || null,
       near_college || null,
       total_rooms,
       total_rooms, // Initially all rooms are available
-      amenities ? JSON.stringify(amenities) : null,
-      images ? JSON.stringify(images) : null,
-      price_per_month
+      amenitiesStr,
+      imageUrls.length > 0 ? JSON.stringify(imageUrls) : null,
+      price_starting
     );
     
-    const property = db.prepare('SELECT * FROM properties WHERE id = ?').get(result.lastInsertRowid);
+    const property = db.prepare('SELECT * FROM properties WHERE id = ?').get(propertyId);
     property.amenities = property.amenities ? JSON.parse(property.amenities) : [];
     property.images = property.images ? JSON.parse(property.images) : [];
     
@@ -209,6 +255,20 @@ export const createProperty = async (req, res) => {
       data: property
     });
   } catch (error) {
+    // Cleanup on error
+    if (propertyId) {
+      const propertyDir = path.join(__dirname, '../../uploads/properties', propertyId);
+      if (fs.existsSync(propertyDir)) {
+        fs.rmSync(propertyDir, { recursive: true, force: true });
+      }
+    }
+
+    tempFiles.forEach(fileInfo => {
+      if (fs.existsSync(fileInfo.tempPath)) {
+        fs.unlinkSync(fileInfo.tempPath);
+      }
+    });
+
     console.error('Create property error:', error);
     res.status(500).json({ 
       success: false, 
@@ -221,6 +281,8 @@ export const createProperty = async (req, res) => {
 // @route   PUT /api/properties/:id
 // @access  Private (Manager/Owner, Admin)
 export const updateProperty = async (req, res) => {
+  let tempFiles = [];
+
   try {
     const { id } = req.params;
     const property = db.prepare('SELECT * FROM properties WHERE id = ?').get(id);
@@ -243,8 +305,49 @@ export const updateProperty = async (req, res) => {
     const {
       name, description, address, city, state, pincode,
       latitude, longitude, near_college, total_rooms,
-      amenities, images, price_per_month, is_active
+      amenities, price_starting, is_active
     } = req.body;
+
+    // Handle uploaded images
+    let updatedImages = null;
+    if (req.files && req.files.length > 0) {
+      tempFiles = req.files.map(file => ({
+        tempPath: file.path,
+        filename: file.filename
+      }));
+
+      // Create property-specific directory if it doesn't exist
+      const propertyDir = path.join(__dirname, '../../uploads/properties', id);
+      if (!fs.existsSync(propertyDir)) {
+        fs.mkdirSync(propertyDir, { recursive: true });
+      }
+
+      // Move files and generate URLs
+      const newImageUrls = [];
+      for (const fileInfo of tempFiles) {
+        const newPath = path.join(propertyDir, fileInfo.filename);
+        
+        // Move file from temp to property folder
+        if (fs.existsSync(fileInfo.tempPath)) {
+          fs.renameSync(fileInfo.tempPath, newPath);
+        }
+        
+        // Generate URL
+        newImageUrls.push(`/uploads/properties/${id}/${fileInfo.filename}`);
+      }
+      
+      // Merge with existing images
+      let existingImages = [];
+      if (property.images) {
+        try {
+          existingImages = JSON.parse(property.images);
+        } catch (e) {
+          existingImages = [];
+        }
+      }
+      
+      updatedImages = JSON.stringify([...existingImages, ...newImageUrls]);
+    }
     
     const stmt = db.prepare(`
       UPDATE properties SET
@@ -260,7 +363,7 @@ export const updateProperty = async (req, res) => {
         total_rooms = COALESCE(?, total_rooms),
         amenities = COALESCE(?, amenities),
         images = COALESCE(?, images),
-        price_per_month = COALESCE(?, price_per_month),
+        price_starting = COALESCE(?, price_starting),
         is_active = COALESCE(?, is_active),
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
@@ -277,9 +380,9 @@ export const updateProperty = async (req, res) => {
       longitude || null,
       near_college || null,
       total_rooms || null,
-      amenities ? JSON.stringify(amenities) : null,
-      images ? JSON.stringify(images) : null,
-      price_per_month || null,
+      amenities ? JSON.stringify(typeof amenities === 'string' ? JSON.parse(amenities) : amenities) : null,
+      updatedImages || null,
+      price_starting || null,
       is_active !== undefined ? is_active : null,
       id
     );
@@ -347,7 +450,7 @@ export const getPropertiesByManager = async (req, res) => {
     const { managerId } = req.params;
     
     // Check authorization
-    if (req.user.role !== 'admin' && req.user.id !== parseInt(managerId)) {
+    if (req.user.role !== 'admin' && req.user.id !== managerId) {
       return res.status(403).json({ 
         success: false,
         message: 'Not authorized to view these properties' 

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quick API Test</title>
+</head>
+<body>
+    <h1>Quick API Test</h1>
+    <button onclick="testAPI()">Test User Management API</button>
+    <pre id="result"></pre>
+
+    <script>
+        async function testAPI() {
+            const result = document.getElementById('result');
+            
+            try {
+                // 1. Login
+                result.textContent = 'Testing login...\n';
+                const loginRes = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'admin@hostel.com',
+                        password: 'admin123'
+                    })
+                });
+                const loginData = await loginRes.json();
+                
+                if (!loginData.success) {
+                    result.textContent += 'Login failed: ' + loginData.message;
+                    return;
+                }
+                
+                const token = loginData.data.accessToken;
+                result.textContent += '✅ Login successful\n\n';
+                
+                // 2. Test user stats
+                result.textContent += 'Testing user stats...\n';
+                const statsRes = await fetch('http://localhost:5000/api/admin/users/stats', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const statsData = await statsRes.json();
+                result.textContent += statsRes.ok ? '✅ Stats work\n' : '❌ Stats failed: ' + statsData.message + '\n';
+                result.textContent += JSON.stringify(statsData, null, 2) + '\n\n';
+                
+                // 3. Test users list
+                result.textContent += 'Testing users list...\n';
+                const usersRes = await fetch('http://localhost:5000/api/admin/users', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const usersData = await usersRes.json();
+                result.textContent += usersRes.ok ? '✅ Users list works\n' : '❌ Users list failed: ' + usersData.message + '\n';
+                result.textContent += JSON.stringify(usersData, null, 2);
+                
+            } catch (error) {
+                result.textContent += '\n❌ Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

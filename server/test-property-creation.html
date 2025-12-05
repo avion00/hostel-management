@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Property Creation</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        pre { background: #f4f4f4; padding: 10px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>Test Property Creation</h1>
+    
+    <button onclick="testPropertyCreation()">Test Create Property</button>
+    <div id="result"></div>
+
+    <script>
+        async function testPropertyCreation() {
+            const result = document.getElementById('result');
+            
+            try {
+                // 1. Login
+                result.innerHTML = 'Logging in...\n';
+                const loginRes = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'admin@hostel.com',
+                        password: 'admin123'
+                    })
+                });
+                const loginData = await loginRes.json();
+                
+                if (!loginData.success) {
+                    result.innerHTML = '<p class="error">Login failed: ' + loginData.message + '</p>';
+                    return;
+                }
+                
+                const token = loginData.data.accessToken;
+                result.innerHTML += '<p class="success">✅ Login successful</p>\n';
+                
+                // 2. Get a manager ID
+                result.innerHTML += 'Getting managers...\n';
+                const managersRes = await fetch('http://localhost:5000/api/admin/users?role=manager', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const managersData = await managersRes.json();
+                
+                let managerId = null;
+                if (managersData.success && managersData.data && managersData.data.length > 0) {
+                    managerId = managersData.data[0].id;
+                    result.innerHTML += '<p class="success">✅ Found manager: ' + managersData.data[0].name + '</p>\n';
+                } else {
+                    // Create a manager if none exists
+                    result.innerHTML += 'No managers found, creating one...\n';
+                    const createManagerRes = await fetch('http://localhost:5000/api/admin/users', {
+                        method: 'POST',
+                        headers: { 
+                            'Authorization': 'Bearer ' + token,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            name: 'Test Manager',
+                            email: 'manager' + Date.now() + '@test.com',
+                            password: 'password123',
+                            phone: '9876543210',
+                            role: 'manager',
+                            is_active: true
+                        })
+                    });
+                    const createManagerData = await createManagerRes.json();
+                    if (createManagerData.success) {
+                        managerId = createManagerData.data.id;
+                        result.innerHTML += '<p class="success">✅ Created manager</p>\n';
+                    } else {
+                        result.innerHTML += '<p class="error">Failed to create manager: ' + createManagerData.message + '</p>';
+                        return;
+                    }
+                }
+                
+                // 3. Create property
+                result.innerHTML += 'Creating property...\n';
+                const formData = new FormData();
+                formData.append('manager_id', managerId);
+                formData.append('name', 'Test Property ' + Date.now());
+                formData.append('description', 'Test property created via API');
+                formData.append('address', '123 Test Street');
+                formData.append('city', 'Test City');
+                formData.append('state', 'Test State');
+                formData.append('pincode', '12345');
+                formData.append('total_rooms', '10');
+                formData.append('price_starting', '5000');
+                formData.append('amenities', JSON.stringify(['WiFi', 'AC', 'Parking']));
+                
+                const propertyRes = await fetch('http://localhost:5000/api/admin/hostels', {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: formData
+                });
+                
+                const propertyData = await propertyRes.json();
+                
+                if (propertyData.success) {
+                    result.innerHTML += '<p class="success">✅ Property created successfully!</p>';
+                    result.innerHTML += '<pre>' + JSON.stringify(propertyData.data, null, 2) + '</pre>';
+                } else {
+                    result.innerHTML += '<p class="error">❌ Failed to create property: ' + propertyData.message + '</p>';
+                    if (propertyData.error) {
+                        result.innerHTML += '<p class="error">Error: ' + propertyData.error + '</p>';
+                    }
+                }
+                
+            } catch (error) {
+                result.innerHTML += '<p class="error">❌ Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

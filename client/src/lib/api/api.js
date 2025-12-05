@@ -18,6 +18,7 @@ const apis = {
   createProperty: `${backendDomain}/properties`,
   updateProperty: (id) => `${backendDomain}/properties/${id}`,
   deleteProperty: (id) => `${backendDomain}/properties/${id}`,
+  getManagerProperties: (managerId) => `${backendDomain}/properties/manager/${managerId}`,
   
   // bookings
   createBooking: `${backendDomain}/bookings`,

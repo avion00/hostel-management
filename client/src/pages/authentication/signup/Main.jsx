@@ -73,8 +73,6 @@ function Signup() {
         navigate("/login");
       }
     } catch (err) {
-      console.error("Signup error:", err);
-      
       // Handle different error scenarios
       if (err.response) {
         const status = err.response.status;
@@ -88,7 +86,17 @@ function Signup() {
           } else {
             toast.error(message || "Please check your input and try again.");
           }
+        } else if (status === 429) {
+          // Rate limit / Too many requests
+          toast.error(message || "Too many signup attempts. Please try again later.");
+        } else if (status === 409) {
+          // Conflict - user already exists
+          toast.error(message || "An account with this email already exists.");
+        } else if (status === 500) {
+          // Server error
+          toast.error("Server error. Please try again later.");
         } else {
+          // Other errors
           toast.error(message || "Error creating account. Please try again.");
         }
       } else if (err.request) {
@@ -205,18 +213,21 @@ function Signup() {
               >
                 Account Type
               </label>
-              <Select
-                value={formData.role}
-                onValueChange={(value) => handleInputChange("role", value)}
-              >
-                <SelectTrigger className="h-12 bg-slate-50 border-slate-200 focus:bg-white">
-                  <SelectValue placeholder="Select account type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="student">Student</SelectItem>
-                  <SelectItem value="manager">Property Manager</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="relative w-full">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5 z-10" />
+                <Select
+                  value={formData.role}
+                  onValueChange={(value) => handleInputChange("role", value)}
+                >
+                  <SelectTrigger className="w-full pl-10 h-14 bg-slate-50 border-slate-200 focus:bg-white">
+                    <SelectValue placeholder="Select account type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="student">Student</SelectItem>
+                    <SelectItem value="manager">Hostel Manager</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <p className="text-xs text-slate-500 mt-1">
                 Students can browse and book hostels. Managers can list and manage properties.
               </p>
