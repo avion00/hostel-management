@@ -119,6 +119,34 @@ const UserBookingPage = () => {
     }
   };
 
+  const loadRoomTypesForProperty = async (propertyId, fallbackRoomTypes = []) => {
+    if (!propertyId) {
+      setRoomOptions(fallbackRoomTypes);
+      return;
+    }
+
+    try {
+      const res = await axiosInstance.get("/admin/rooms", {
+        params: { property_id: propertyId, available: "true" },
+      });
+
+      const apiRoomTypes = res.data?.data?.roomTypes || [];
+
+      if (res.data?.success && apiRoomTypes.length > 0) {
+        const mapped = apiRoomTypes.map((rt) => ({
+          id: rt.id,
+          type: rt.name,
+        }));
+        setRoomOptions(mapped);
+      } else {
+        setRoomOptions(fallbackRoomTypes);
+      }
+    } catch (error) {
+      console.error("Error loading room types:", error);
+      setRoomOptions(fallbackRoomTypes);
+    }
+  };
+
   useEffect(() => {
     fetchBookings();
   }, []);
@@ -135,7 +163,7 @@ const UserBookingPage = () => {
         city: ctx.propertyCity,
       });
 
-      setRoomOptions(ctx.roomTypes || []);
+      loadRoomTypesForProperty(ctx.propertyId, ctx.roomTypes || []);
 
       setFormData((prev) => ({
         ...prev,
