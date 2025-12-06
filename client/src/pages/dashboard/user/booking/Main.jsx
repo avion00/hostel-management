@@ -85,6 +85,7 @@ const UserBookingPage = () => {
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [initialisedFromContext, setInitialisedFromContext] = useState(false);
+  const [propertyOptions, setPropertyOptions] = useState([]);
   const [roomOptions, setRoomOptions] = useState([]);
   const [selectedPropertyInfo, setSelectedPropertyInfo] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -101,6 +102,10 @@ const UserBookingPage = () => {
     pay_mode: "partial",
   });
 
+  const selectedPropertyOption = propertyOptions.find(
+    (p) => p.id === formData.property_id
+  );
+
   const fetchBookings = async () => {
     try {
       setLoading(true);
@@ -116,6 +121,27 @@ const UserBookingPage = () => {
       toast.error(error.response?.data?.message || "Failed to load bookings");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadProperties = async () => {
+    try {
+      const res = await axiosInstance.get(apis.getProperties, {
+        params: { limit: 100 },
+      });
+
+      if (res.data?.success) {
+        const properties = res.data.data || [];
+        const mapped = properties.map((p) => ({
+          id: p.id,
+          name: p.name,
+          address: p.address,
+          city: p.city,
+        }));
+        setPropertyOptions(mapped);
+      }
+    } catch (error) {
+      console.error("Error loading properties:", error);
     }
   };
 
@@ -149,6 +175,7 @@ const UserBookingPage = () => {
 
   useEffect(() => {
     fetchBookings();
+    loadProperties();
   }, []);
 
   useEffect(() => {
@@ -204,7 +231,6 @@ const UserBookingPage = () => {
 
     const missingFields = [];
     if (!formData.property_id) missingFields.push("property");
-    if (!formData.room_type_id) missingFields.push("room type");
     if (!formData.start_date) missingFields.push("start date");
     if (!formData.duration_type) missingFields.push("duration type");
     if (!formData.duration_value) missingFields.push("duration value");
@@ -221,7 +247,7 @@ const UserBookingPage = () => {
 
       const payload = {
         property_id: formData.property_id,
-        room_type_id: formData.room_type_id,
+        room_type_id: formData.room_type_id || null,
         start_date: formData.start_date,
         duration_type: formData.duration_type,
         duration_value: Number(formData.duration_value),
@@ -376,49 +402,81 @@ const UserBookingPage = () => {
             )}
 
             {!selectedPropertyInfo && (
-              <div>
-                <Label>Property ID</Label>
-                <Input
-                  name="property_id"
-                  value={formData.property_id}
-                  onChange={handleInputChange}
-                  placeholder="Property ID"
-                />
-              </div>
+              propertyOptions.length > 0 ? (
+                <div>
+                  <Label>Property</Label>
+                  <Select
+                    value={formData.property_id}
+                    onValueChange={(value) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        property_id: value,
+                        room_type_id: "",
+                      }));
+                      loadRoomTypesForProperty(value, []);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select property" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {propertyOptions.map((property) => (
+                        <SelectItem key={property.id} value={property.id}>
+                          {property.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedPropertyOption && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      {[selectedPropertyOption.address, selectedPropertyOption.city]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <Label>Property ID</Label>
+                  <Input
+                    name="property_id"
+                    value={formData.property_id}
+                    onChange={handleInputChange}
+                    placeholder="Property ID"
+                  />
+                </div>
+              )
             )}
 
-            {roomOptions.length > 0 ? (
-              <div>
-                <Label>Room Type</Label>
-                <Select
-                  value={formData.room_type_id}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, room_type_id: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select room type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roomOptions.map((room) => (
-                      <SelectItem key={room.id} value={room.id}>
-                        {room.type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : (
-              <div>
-                <Label>Room Type ID</Label>
-                <Input
-                  name="room_type_id"
-                  value={formData.room_type_id}
-                  onChange={handleInputChange}
-                  placeholder="Room type ID"
-                />
-              </div>
-            )}
+            <div>
+              <Label>Room Type</Label>
+              <Select
+                value={formData.room_type_id}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, room_type_id: value }))
+                }
+                disabled={!formData.property_id || roomOptions.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      !formData.property_id
+                        ? "Select property first"
+                        : roomOptions.length === 0
+                        ? "No room types available"
+                        : "Select room type"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {roomOptions.map((room) => (
+                    <SelectItem key={room.id} value={room.id}>
+                      {room.type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>

@@ -31,11 +31,13 @@ export const createBooking = async (req, res) => {
 
     const student_id = req.user.id;
 
-    // Basic validation
-    if (!property_id || !room_type_id || !start_date || !duration_type || !duration_value) {
+    const normalizedRoomTypeId = room_type_id || null;
+
+    // Basic validation (room_type_id is optional)
+    if (!property_id || !start_date || !duration_type || !duration_value) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide property_id, room_type_id, start_date, duration_type and duration_value',
+        message: 'Please provide property_id, start_date, duration_type and duration_value',
       });
     }
 
@@ -68,23 +70,45 @@ export const createBooking = async (req, res) => {
     }
 
     // Check room type exists and has available beds
-    const roomType = db
-      .prepare(
-        'SELECT id, name, price_per_day, price_per_week, price_per_month, beds_available FROM room_types WHERE id = ? AND property_id = ?'
-      )
-      .get(room_type_id, property_id);
+    let roomType;
+
+    if (normalizedRoomTypeId) {
+      roomType = db
+        .prepare(
+          'SELECT id, name, price_per_day, price_per_week, price_per_month, beds_available FROM room_types WHERE id = ? AND property_id = ?'
+        )
+        .get(normalizedRoomTypeId, property_id);
+    } else {
+      // Auto-select a suitable room type for this property when none is provided
+      roomType = db
+        .prepare(
+          'SELECT id, name, price_per_day, price_per_week, price_per_month, beds_available FROM room_types WHERE property_id = ? AND beds_available >= ? ORDER BY created_at ASC'
+        )
+        .get(property_id, bedsRequested);
+    }
 
     if (!roomType) {
       return res.status(404).json({
         success: false,
-        message: 'Room type not found for this property',
+        message: normalizedRoomTypeId
+          ? 'Room type not found for this property'
+          : 'No room types with enough available beds were found for this property',
       });
     }
+
+    const finalRoomTypeId = roomType.id;
+
+    console.log('Booking bed availability check', {
+      room_type_id: finalRoomTypeId,
+      property_id,
+      beds_available: roomType.beds_available,
+      bedsRequested,
+    });
 
     if (roomType.beds_available < bedsRequested) {
       return res.status(400).json({
         success: false,
-        message: 'Selected room type does not have enough available beds',
+        message: `Selected room type does not have enough available beds. Requested ${bedsRequested}, available ${roomType.beds_available}`,
       });
     }
 
@@ -161,7 +185,7 @@ export const createBooking = async (req, res) => {
       bookingId,
       student_id,
       property_id,
-      room_type_id,
+      finalRoomTypeId,
       start_date,
       end_date,
       duration_type,
@@ -189,7 +213,7 @@ export const createBooking = async (req, res) => {
     // Update room type availability
     db.prepare(
       'UPDATE room_types SET beds_available = beds_available - ? WHERE id = ? AND property_id = ?'
-    ).run(bedsRequested, room_type_id, property_id);
+    ).run(bedsRequested, finalRoomTypeId, property_id);
 
     // Update property available beds
     db.prepare('UPDATE properties SET available_beds = available_beds - ? WHERE id = ?').run(
